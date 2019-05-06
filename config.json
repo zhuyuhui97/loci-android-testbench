@@ -1,0 +1,16 @@
+{
+    "trigger": 3,
+    "monkey_ops": 1000,
+    "running_time": 20,
+    "input_dir": "/home/zyh/市场11apk/test",
+    "output_dir": "/home/zyh/dev/Testbench/0.2.4/out",
+    "remote_bin_dir": "/data/capture123",
+    "remote_cap_dir": "/sdcard/capture123",
+    "local_bin_dir": "bin",
+    "bin_tcpdump": {
+        "armv7l": "tcpdump_armv7hf",
+        "aarch64": "tcpdump_armv7hf"
+    },
+    "bin_uaplugin": "uaplugin.jar",
+    "stor_dir":"/home/zyh/dev/Testbench/0.2.4/stor"
+}
