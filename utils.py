@@ -2,15 +2,21 @@ import subprocess
 import os
 import logging
 import re
+import shlex
 
 logger = logging.getLogger(__name__)
 
 
+# def run_cmdline(cmd):
+#     logger.debug('[CMD]>%s' % cmd)
+#     ret, output = subprocess.getstatusoutput(cmd)
+#     return ret, output
+
 def run_cmdline(cmd):
     logger.debug('[CMD]>%s' % cmd)
-    ret, output = subprocess.getstatusoutput(cmd)
-    return ret, output
-
+    cmd_array = shlex.split(cmd)
+    result = subprocess.run(cmd_array, shell=False, stdout=subprocess.PIPE)
+    return result.returncode, result.stdout.decode().strip()
 
 def get_elf_arch(elf_path):
     # run_cmdline('readelf')
@@ -71,3 +77,21 @@ def check_config(config):
 
 def escape_path(path):
     return path.replace(' ', '\\ ')
+
+def get_PATH():
+    return os.getenv('PATH').split(':')
+
+def whereis(exec_name):
+    PATH = get_PATH()
+    result = list()
+    for item in PATH:
+        search_path = os.path.join(item, exec_name)
+        if os.path.exists(search_path):
+            result.append(search_path)
+    return result
+
+
+def whereis_adb():
+    candidates = whereis('adb')
+    # TODO Select best adb version from candidates
+    return candidates[0]

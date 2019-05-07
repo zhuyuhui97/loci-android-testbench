@@ -19,6 +19,7 @@ class Device(object):
         self.run_thread = thread
         self.cmd_su_prefix = ''
         self.build_prop = dict()
+        self.uiauto_pipe = None
         # self.init_device() Do it outside!
 
     @classmethod
@@ -31,7 +32,8 @@ class Device(object):
         return device_list
 
     def adb_run_remote_cmdline(self, cmd):
-        return run_cmdline('adb -s %s shell \"%s\"' % (self.device_name, cmd))
+        cmdline = 'adb -s {0} shell \"{1}\"'.format(self.device_name, cmd)
+        return run_cmdline(cmdline)
 
     def adb_run_remote_su_cmdline(self, cmd):
         if self.cmd_su_prefix != '':
@@ -304,52 +306,71 @@ class Device(object):
         bin_uaplugin = config['bin_uaplugin']
         remote_cap_dir = config['remote_cap_dir']
         remote_bin_dir = config['remote_bin_dir']
-        # TODO use remote_bin_path?
-        local_bin = os.path.join(config['current_dir'], local_bin_dir, bin_uaplugin)
-        dst_bin = '{0}/{1}'.format(remote_cap_dir, bin_uaplugin)
-        ret, output = self.adb_push(local_bin, dst_bin)
+        dummymain_path = os.path.join(config['current_dir'], local_bin_dir, 'uaplugin_dummymain.apk')
+        uaplugin_path = os.path.join(config['current_dir'], local_bin_dir, 'uaplugin_test.apk')
+        cmd = 'adb install -t -r \"' + dummymain_path + '\"'
+        ret, output = run_cmdline(cmd)
         if ret != 0:
-            # self.logger.error('Failed to push uiautomator binary to %s: %s' %
-            #              (self.device_name, output))
-            # return ret, output
-            raise DevicePushUiautomatorError(
-                device=self, src=local_bin, dst=dst_bin, output=output)
-        cmd = 'mkdir {0}'.format(remote_bin_dir)
-        ret, output = self.adb_run_remote_su_cmdline(cmd)
-        cmd = 'cp {0}/{2} {1}/{2}'.format(remote_cap_dir, remote_bin_dir, bin_uaplugin)
-        ret, output = self.adb_run_remote_su_cmdline(cmd)
-        if ret != 0:
-            # self.logger.error(' Failed to setup uiautomator binary to %s: %s' %
-            #              (self.device_name, output))
-            # return ret, output
             raise DeviceSetupUiautomatorError(
                 device=self, cmd=cmd, ret=ret, output=output, info='Failed to setup uiautomator')
-        cmd = 'rm {0}/{1}'.format(remote_cap_dir, bin_uaplugin)
-        self.adb_run_remote_cmdline(cmd)
-        cmd = 'chmod +x {0}/{1}'.format(remote_bin_dir, bin_uaplugin)
-        ret, output = self.adb_run_remote_su_cmdline(cmd)
+        cmd = 'adb install -t -r \"' + uaplugin_path + "\""
+        ret, output = run_cmdline(cmd)
         if ret != 0:
-            # self.logger.error('Failed to setup uiautomator binary to %s: %s' %
-            #              (self.device_name, output))
-            # return ret, output
+
             raise DeviceSetupUiautomatorError(
                 device=self, cmd=cmd, ret=ret, output=output, info='Failed to setup uiautomator')
+        # # TODO use remote_bin_path?
+        # local_bin = os.path.join(config['current_dir'], local_bin_dir, bin_uaplugin)
+        # dst_bin = '{0}/{1}'.format(remote_cap_dir, bin_uaplugin)
+        # ret, output = self.adb_push(local_bin, dst_bin)
+        # if ret != 0:
+        #     # self.logger.error('Failed to push uiautomator binary to %s: %s' %
+        #     #              (self.device_name, output))
+        #     # return ret, output
+        #     raise DevicePushUiautomatorError(
+        #         device=self, src=local_bin, dst=dst_bin, output=output)
+        # cmd = 'mkdir {0}'.format(remote_bin_dir)
+        # ret, output = self.adb_run_remote_su_cmdline(cmd)
+        # cmd = 'cp {0}/{2} {1}/{2}'.format(remote_cap_dir, remote_bin_dir, bin_uaplugin)
+        # ret, output = self.adb_run_remote_su_cmdline(cmd)
+        # if ret != 0:
+        #     # self.logger.error(' Failed to setup uiautomator binary to %s: %s' %
+        #     #              (self.device_name, output))
+        #     # return ret, output
+        #     raise DeviceSetupUiautomatorError(
+        #         device=self, cmd=cmd, ret=ret, output=output, info='Failed to setup uiautomator')
+        # cmd = 'rm {0}/{1}'.format(remote_cap_dir, bin_uaplugin)
+        # self.adb_run_remote_cmdline(cmd)
+        # cmd = 'chmod +x {0}/{1}'.format(remote_bin_dir, bin_uaplugin)
+        # ret, output = self.adb_run_remote_su_cmdline(cmd)
+        # if ret != 0:
+        #     # self.logger.error('Failed to setup uiautomator binary to %s: %s' %
+        #     #              (self.device_name, output))
+        #     # return ret, output
+        #     raise DeviceSetupUiautomatorError(
+        #         device=self, cmd=cmd, ret=ret, output=output, info='Failed to setup uiautomator')
         return 0, None
 
+
     def launch_uiautomator(self):
-        bin_uaplugin = self.global_config['bin_uaplugin']
-        remote_bin_dir = self.global_config['remote_bin_dir']
-        cmd = "uiautomator runtest {0}/{1} --nohup -c com.jikexueyuan.Test#traversalAPK".format(remote_bin_dir, bin_uaplugin)
-        ret, output = self.adb_run_remote_cmdline(cmd)
-        if ret != 0:
-            #self.logger.error('Error while launching uiautomator. errno=%d' % ret)
-            raise DeviceRunUiautomatorError(
-                device=self, cmd=cmd, ret=ret, output=output, info='Error while launching uiautomator.')
-        return ret
+        # bin_uaplugin = self.global_config['bin_uaplugin']
+        # remote_bin_dir = self.global_config['remote_bin_dir']
+        # cmd = "uiautomator runtest {0}/{1} --nohup -c com.jikexueyuan.Test#traversalAPK".format(remote_bin_dir, bin_uaplugin)
+        # ret, output = self.adb_run_remote_cmdline(cmd)
+        # if ret != 0:
+        #     #self.logger.error('Error while launching uiautomator. errno=%d' % ret)
+        #     raise DeviceRunUiautomatorError(
+        #         device=self, cmd=cmd, ret=ret, output=output, info='Error while launching uiautomator.')
+        # return ret
+        cmd = 'adb shell am instrument -w -r -e debug false cn.edu.ujn.loci.uaplugin2.test/androidx.test.runner.AndroidJUnitRunner'
+        cmd_line = shlex.split(cmd)
+        self.uiauto_pipe = subprocess.Popen(cmd_line)
         # TODO test it!
 
     def kill_remote_uiautomator(self):
-        self.adb_run_remote_su_cmdline('killall uiautomator')
+        # self.adb_run_remote_su_cmdline('killall uiautomator')
+        self.uiauto_pipe.terminate()
+        self.uiauto_pipe.poll()
 
     def launch_monkey(self, pkg_name, op_count):
         #cmd = "\'nohup monkey -p %s --throttle 400 -v-v-v %d >/dev/null 2>&1 &\'" % (pkg_name, op_count)
@@ -382,10 +403,12 @@ class Device(object):
     def init_root_priv(self):
         run_cmdline('adb -s {0} root'.format(self.device_name))
         ret, output = self.adb_run_remote_su_cmdline('whoami')
+        logging.debug(output)
         if output == 'root':
             return
         self.cmd_su_prefix = 'su -c'
         ret, output = self.adb_run_remote_su_cmdline('whoami')
+        logging.debug(output)
         if output != 'root':
             raise RootPrivError(self)
         return

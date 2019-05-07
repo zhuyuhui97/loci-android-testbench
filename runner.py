@@ -39,14 +39,19 @@ class AppCrashWatcher(threading.Thread):
 
     def clear_stdout(self):
         while(True):
-            line = self.stdout.readline().decode()
-            if line == '':
-                break
+            try:
+                line = self.stdout.readline().decode()
+                if line == '':
+                    break
+            except:
+                pass
 
     def run(self):
         run_cmdline('adb -s %s logcat -c' % self.device_name)
-        self.adb_pipe = subprocess.Popen('adb -s %s logcat -s AndroidRuntime:E' % self.device_name,
-                                         stderr=subprocess.DEVNULL, stdout=subprocess.PIPE, shell=True, bufsize=1)
+        cmd = 'adb -s {0} logcat -s AndroidRuntime:E'.format(self.device_name)
+        cmd_array = shlex.split(cmd)
+        self.adb_pipe = subprocess.Popen(cmd_array,
+                                         stderr=subprocess.DEVNULL, stdout=subprocess.PIPE, shell=False, bufsize=1)
         self.stdout = self.adb_pipe.stdout
         f_flag = fcntl.fcntl(self.stdout, fcntl.F_GETFL)
         fcntl.fcntl(self.stdout, fcntl.F_SETFL, f_flag | os.O_NONBLOCK)

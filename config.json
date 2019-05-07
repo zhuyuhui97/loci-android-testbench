@@ -1,9 +1,9 @@
 {
-    "trigger": 3,
+    "trigger": 2,
     "monkey_ops": 1000,
     "running_time": 20,
-    "input_dir": "/home/zyh/市场11apk/test",
-    "output_dir": "/home/zyh/dev/Testbench/0.2.4/out",
+    "input_dir": "/home/zyh/dev/data/in",
+    "output_dir": "/home/zyh/dev/data/out",
     "remote_bin_dir": "/data/capture123",
     "remote_cap_dir": "/sdcard/capture123",
     "local_bin_dir": "bin",

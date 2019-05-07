@@ -93,6 +93,7 @@ if __name__ == '__main__':
     config_file = open(os.path.join(self_dir, 'config.json'))
     config = json.load(config_file)
     config['current_dir'] = self_dir
+    #config['bin_path']['adb'] = whereis_adb()
     # check_config(config)
     config_file.close()
 
@@ -126,7 +127,7 @@ if __name__ == '__main__':
         item.join()
 
     # HACK Kill adb manually for subprocess.Popen(shell=True) in acw thread
-    run_cmdline('killall adb')
+    #run_cmdline('killall adb')
 
     log_file.close()
     # sql_conn.close()
