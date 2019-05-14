@@ -39,11 +39,10 @@ class ApkAnalyzerThread(threading.Thread):
         self.gev_no_more_apk.clear()
         self.logger = logging.getLogger(name=__name__)
 
-    def report_error(self, path, md5):
+    def report_error(self, path, md5, flag):
         item = dict()
         item['apk_path'] = path
         item['md5'] = md5
-        flag = self.result_writer.FLAG_BROKEN
         self.result_writer.report_fail(None, item, flag)
 
     def run(self):
@@ -59,10 +58,16 @@ class ApkAnalyzerThread(threading.Thread):
                 md5 = get_md5_from_path(item)
                 info = ApkPackage(item, self.config)
                 self.queue.put(info)
-            except (ApkPkgParseError, Exception) as e:
+            except ApkPkgEssentialPropMissing:
                 path = item
+                flag = self.result_writer.FLAG_ESSENTIAL_PROP_MISSING
+                self.logger.error('essential properity missing ' + item)
+                self.report_error(item, md5, flag)# TODO print more info here
+            except (ApkPkgParseError, Exception):
+                path = item
+                flag = self.result_writer.FLAG_BROKEN
                 self.logger.error('Failed to parse apk ' + item)
-                self.report_error(item, md5)
+                self.report_error(item, md5, flag)
         self.gev_no_more_apk.set()
         self.queue.put(None)
 

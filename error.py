@@ -142,5 +142,8 @@ class ApkPkgError(Exception):
 class ApkPkgParseError(ApkPkgError):
     pass
 
+class ApkPkgEssentialPropMissing(ApkPkgError):
+    pass
+
 class TestbenchInterruptedError(Exception):
     pass

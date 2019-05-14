@@ -7,7 +7,6 @@ from utils import *
 
 
 class ResultWriter(object):
-    # TODO Different flags for monkey/uiautomator/manual
     FLAG_AVD_OK = 1
     FLAG_MONKEY_OK = 2
     FLAG_MANUAL_OK = 3
@@ -15,6 +14,7 @@ class ResultWriter(object):
     FLAG_BROKEN = 0
     FLAG_INSTALL_FAIL = 5
     FLAG_CRASH = 6
+    FLAG_ESSENTIAL_PROP_MISSING = 7 # TODO Merged into FLAG_BROKEN in derived class.
 
     def __init__(self, config, lock):
         self.config = config
@@ -117,6 +117,9 @@ class SqlTextResultWriter(ResultWriter):
         sql_command = list()
         if str_flag == self.FLAG_INSTALL_FAIL or str_flag == self.FLAG_CRASH: # Set differrent flag for different device
             str_flag = '{0}/{1}'.format(str_flag, device.device_tag)
+        # TODO ESSENTIAL_PROP_MISSING merged into BROKEN for current database define, which should be a distinct one.
+        if str_flag == self.FLAG_ESSENTIAL_PROP_MISSING:
+            str_flag = self.FLAG_BROKEN
         sql_format = self.SQLTEMPLATE_UPDATE_COLLECTED_FLAG
         sql_template = string.Template(sql_format)
         sql_command.append(sql_template.safe_substitute(new_flag=str_flag, md5=md5))

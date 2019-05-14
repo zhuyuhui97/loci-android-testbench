@@ -8,6 +8,7 @@ import traceback
 from utils import *
 from error import *
 from device import Device
+from apkpackage import ApkPackage
 
 
 class AppCrashWatcher(threading.Thread):
@@ -37,16 +38,19 @@ class AppCrashWatcher(threading.Thread):
         self.current_app_name = app_name
         self.lock.release()
 
-    def clear_stdout(self):
+    #TODO handle exception when failed to readline? or use apd_pipe_getline() to check pipe before read?
+    def adb_pipe_clear_stdout(self):
         while(True):
             try:
-                line = self.stdout.readline().decode()
+                line = self.adb_pipe_getline()
                 if line == '':
                     break
             except:
                 pass
 
-    def run(self):
+    #TODO call this in class.__init__(), call class.__init__ out of RunnerThread.__init__()
+    #TODO check if init succeeded. 
+    def adb_pipe_init(self):
         run_cmdline('adb -s %s logcat -c' % self.device_name)
         cmd = 'adb -s {0} logcat -s AndroidRuntime:E'.format(self.device_name)
         cmd_array = shlex.split(cmd)
@@ -55,8 +59,21 @@ class AppCrashWatcher(threading.Thread):
         self.stdout = self.adb_pipe.stdout
         f_flag = fcntl.fcntl(self.stdout, fcntl.F_GETFL)
         fcntl.fcntl(self.stdout, fcntl.F_SETFL, f_flag | os.O_NONBLOCK)
+
+    def adb_pipe_check(self):
+        if self.adb_pipe.poll() != None:
+            logger.error('ADB subprocess failed, trying to init again.')
+            self.adb_pipe_init()
+
+    def adb_pipe_getline(self):
+        self.adb_pipe_check()
+        return self.stdout.readline().decode(encoding='utf-8')
+        
+    #TODO handle stdout.read() exceptions
+    def run(self):
+        self.adb_pipe_init()
         while (self.isrunning):
-            self.clear_stdout()
+            self.adb_pipe_clear_stdout()
             self.ready_event.wait()
             if self.isrunning == False:
                 self.adb_pipe.terminate()
@@ -68,11 +85,11 @@ class AppCrashWatcher(threading.Thread):
             while self.ready_event.is_set() and self.isrunning:
                 while (True):
                     try:
-                        line = self.stdout.readline().decode(encoding='gbk')
+                        line = self.adb_pipe_getline()
                         if line == '':
                             break
                         if 'E AndroidRuntime: FATAL EXCEPTION:' in line:
-                            next_line = self.stdout.readline().decode()
+                            next_line = self.adb_pipe_getline()
                             if self.current_app_name in next_line:
                                 print('Decected app crash %s.' % current_app)
                                 self.crash_event.set()

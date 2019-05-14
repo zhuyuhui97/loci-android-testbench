@@ -308,12 +308,12 @@ class Device(object):
         remote_bin_dir = config['remote_bin_dir']
         dummymain_path = os.path.join(config['current_dir'], local_bin_dir, 'uaplugin_dummymain.apk')
         uaplugin_path = os.path.join(config['current_dir'], local_bin_dir, 'uaplugin_test.apk')
-        cmd = 'adb install -t -r \"' + dummymain_path + '\"'
+        cmd = 'adb -s {0} install -t -r \"{1}\"'.format(self.device_name, dummymain_path)
         ret, output = run_cmdline(cmd)
         if ret != 0:
             raise DeviceSetupUiautomatorError(
                 device=self, cmd=cmd, ret=ret, output=output, info='Failed to setup uiautomator')
-        cmd = 'adb install -t -r \"' + uaplugin_path + "\""
+        cmd = 'adb -s {0} install -t -r \"{1}\"'.format(self.device_name, uaplugin_path)
         ret, output = run_cmdline(cmd)
         if ret != 0:
 
@@ -362,15 +362,16 @@ class Device(object):
         #     raise DeviceRunUiautomatorError(
         #         device=self, cmd=cmd, ret=ret, output=output, info='Error while launching uiautomator.')
         # return ret
-        cmd = 'adb shell am instrument -w -r -e debug false cn.edu.ujn.loci.uaplugin2.test/androidx.test.runner.AndroidJUnitRunner'
+        cmd = 'adb -s {0} shell am instrument -w -r -e debug false cn.edu.ujn.loci.uaplugin2.test/androidx.test.runner.AndroidJUnitRunner'.format(self.device_name)
         cmd_line = shlex.split(cmd)
         self.uiauto_pipe = subprocess.Popen(cmd_line)
         # TODO test it!
 
     def kill_remote_uiautomator(self):
         # self.adb_run_remote_su_cmdline('killall uiautomator')
-        self.uiauto_pipe.terminate()
-        self.uiauto_pipe.poll()
+        if self.uiauto_pipe != None:
+            self.uiauto_pipe.terminate()
+            self.uiauto_pipe.poll()
 
     def launch_monkey(self, pkg_name, op_count):
         #cmd = "\'nohup monkey -p %s --throttle 400 -v-v-v %d >/dev/null 2>&1 &\'" % (pkg_name, op_count)
@@ -445,8 +446,14 @@ class Device(object):
         self.kill_remote_uiautomator()
         self.kill_remote_monkey()
 
+    # TODO handle uninstall failure
+    def clean_uaplugin(self):
+        self.adb_run_remote_cmdline('pm uninstall cn.edu.ujn.loci.uaplugin2.test')
+        self.adb_run_remote_cmdline('pm uninstall cn.edu.ujn.loci.uaplugin2')
+
     def clean_device(self, tcpdump_pipe=None):
         self.clean_capture_process(tcpdump_pipe)
         # TODO Pull not pulled pcap files
         self.clean_capture_dirs()
         self.clean_bin_dirs()
+        self.clean_uaplugin()
