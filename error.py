@@ -1,9 +1,23 @@
 class CmdError(Exception):
-    def __init__(self, cmd, ret=None, output=None, info=None):
+    def __init__(self, cmd=None, ret=None, stdout=None, stderr=None, info=None):
         self.cmd = cmd
-        self.output = output
+        self.stdout = stdout
         self.info = info
         self.ret = ret
+        self.stderr = stderr
+
+    def __str__(self):
+        result = (  'info:{0}\n'
+                    'ret:{1}\n'
+                    'stdout:{2}\n'
+                    'stderr:{3}\n'
+                 ).format(
+                    self.info,
+                    self.ret,
+                    self.stdout,
+                    self.stderr
+                 )
+        return result
 
 
 class CmdListDeviceError(CmdError):
@@ -11,36 +25,44 @@ class CmdListDeviceError(CmdError):
 
 
 class AdbError(CmdError):
-    def __init__(self, device, cmd=None, ret=None, output=None, info=None):
+    def __init__(self, device, **kwargs):
         self.device = device
-        super().__init__(cmd, ret, output, info)
+        super().__init__(**kwargs)
 
 
 class RootPrivError(AdbError):
     pass
 
 class AdbFileTransferError(AdbError):
-    def __init__(self, device, src, dst, output=None):
-        super().__init__(device, output=output)
+    def __init__(self, src, dst, **kwargs):
+        super().__init__(**kwargs)
         self.src = src
         self.dst = dst
+    def __str__(self):
+        return self.src + ' -> ' + self.dst
 
 
 # 'adb push' command returned a non-0 value
 class AdbPushError(AdbFileTransferError):
-    pass
+    def __str__(self):
+        return '[Host] ' + super().__str__() + ' [Device]'
 
 
 # 'adb pull' command returned a non-0 value
 class AdbPullError(AdbFileTransferError):
-    pass
+    def __str__(self):
+        return '[Device] ' + super().__str__() + ' [Host]'
 
 
 class DeviceInitError(AdbError):
-    def __init__(self, device, src=None, dst=None, cmd=None, ret=None, output=None, info=None):
-        super().__init__(device, cmd=cmd, ret=ret, output=output, info=info)
+    def __init__(self, src=None, dst=None, **kwargs):
+        super().__init__(**kwargs)
         self.src = src
         self.dst = dst
+
+    def __str__(self):
+        return self.info
+
 
 # failed to push executable files
 class DevicePushExecutableError(DeviceInitError):
@@ -96,7 +118,13 @@ class DeviceGetNetIfError(DeviceGetPropError):
 
 
 class DeviceGetBuildPropError(DeviceGetPropError):
-    pass
+    def __str__(self):
+        prop = self.device.build_prop
+        prop_fails = list()
+        for item in prop:
+            if prop[item] == 'NULL':
+                prop_fails.append(item)
+        return str(prop_fails)
 
 
 class DeviceNetIfDown(DeviceGetNetIfError):
@@ -104,11 +132,38 @@ class DeviceNetIfDown(DeviceGetNetIfError):
 
 
 class DeviceApkError(AdbError):
-    pass
+    def __init__(self, apk_info=None, **kwargs):
+        self.apk_info = apk_info
+        super().__init__(**kwargs)
+    
+    def __str__(self):
+        fmt = '\'{0}\' @ \'{1}\':({2})>{3}.'
+        report = fmt.format(
+            self.apk_info, 
+            self.device.device_name, 
+            self.ret,
+            self.stdout
+            ) 
+        return report
 
 
 class DeviceApkInstallError(DeviceApkError):
-    pass
+    def __init__(self, errtype=None, apk_path=None, **kwargs):
+        super().__init__(**kwargs)
+        self.errtype = errtype
+        if apk_path != None:
+            self.apk_path = apk_path
+        else:
+            self.apk_path = self.apk_info['apk_path']
+
+    def __str__(self):
+        fmt = '\'{0}\' @ \'{1}\':{2}.'
+        report = fmt.format(
+            self.apk_path, 
+            self.device.device_name, 
+            self.info
+            ) 
+        return report
 
 
 class DeviceApkLaunchError(DeviceApkError):
@@ -120,12 +175,50 @@ class DeviceApkRuntimeError(DeviceApkError):
 
 
 class DeviceApkUninstallError(DeviceApkError):
+    def __init__(self, errtype=None, pkg_name=None, **kwargs):
+        super().__init__(**kwargs)
+        self.errtype = errtype
+        if pkg_name != None:
+            self.pkg_name = pkg_name
+        else:
+            self.pkg_name = self.apk_info['pkg_name']
+
+    def __str__(self):
+        fmt = '\'{0}\' @ \'{1}\':{2}.'
+        report = fmt.format(
+            self.pkg_name, 
+            self.device.device_name, 
+            self.info
+            ) 
+        return report
+
+class DeviceApkBatchError(AdbError):
+    def __init__(self, status_list, **kwargs):
+        self.status_list = status_list
+        super().__init__(**kwargs)
+    
+    def __str__(self):
+        return str(self.status_list)
+
+class DeviceApkBatchInstallError(DeviceApkBatchError):
     pass
+
+class DeviceApkBatchUninstallError(DeviceApkBatchError):
+    pass
+
+class DeviceApkBatchUninstallFailHandleError(DeviceApkBatchUninstallError):
+    '''批量卸载失败，尝试使用特殊手段处理后仍未被卸载。'''
+    def __str__(self):
+        pkg_list = list()
+        for item in self.status_list:
+            pkg_list.append(item['pkg_name'])
+        return str(pkg_list)
+
 
 
 class DeviceFileNotExist(AdbError):
-    def __init__(self, device, path, info=None):
-        super().__init__(device=device, info=info)
+    def __init__(self, path, **kwargs):
+        super().__init__(**kwargs)
         self.path = path
 
 
@@ -146,4 +239,7 @@ class ApkPkgEssentialPropMissing(ApkPkgError):
     pass
 
 class TestbenchInterruptedError(Exception):
+    pass
+
+class CommandTimeout(Exception):
     pass

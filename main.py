@@ -24,7 +24,7 @@ logger = logging.getLogger(name=__name__)
 no_more_apk = threading.Event()
 stopped = threading.Event()
 global_wait = threading.Event()
-
+getapk_lock = threading.Lock()
 
 class ApkAnalyzerThread(threading.Thread):
     def __init__(self, path, queue, config, result_writer, gev_stop, gev_no_more_apk):
@@ -37,7 +37,7 @@ class ApkAnalyzerThread(threading.Thread):
         self.gev_stop.clear()
         self.gev_no_more_apk = gev_no_more_apk
         self.gev_no_more_apk.clear()
-        self.logger = logging.getLogger(name=__name__)
+        self.logger = logging.getLogger(name='main.' + self.__class__.__name__)
 
     def report_error(self, path, md5, flag):
         item = dict()
@@ -61,12 +61,13 @@ class ApkAnalyzerThread(threading.Thread):
             except ApkPkgEssentialPropMissing:
                 path = item
                 flag = self.result_writer.FLAG_ESSENTIAL_PROP_MISSING
-                self.logger.error('essential properity missing ' + item)
+                self.logger.error('Essential properity missing ' + item)
                 self.report_error(item, md5, flag)# TODO print more info here
-            except (ApkPkgParseError, Exception):
+            except (ApkPkgParseError, Exception) as ex:
                 path = item
                 flag = self.result_writer.FLAG_BROKEN
-                self.logger.error('Failed to parse apk ' + item)
+                self.logger.error('Failed to parse apk ' + item + ' ' + ex.__class__.__name__)
+                self.logger.error(traceback.format_exc())
                 self.report_error(item, md5, flag)
         self.gev_no_more_apk.set()
         self.queue.put(None)
@@ -88,7 +89,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGHUP, sigint_handler)
     signal.signal(signal.SIGTERM, sigint_handler)
     logging.basicConfig(
-        level=logging.DEBUG, format='[%(asctime)s][%(name)s][%(levelname)s] %(message)s')
+        level=logging.DEBUG, format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s')
 
     global device_thread_list
     device_thread_list = list()

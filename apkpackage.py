@@ -13,7 +13,7 @@ class ApkPackage(dict):
         self.config = config
         self.output = ''
         self.read_info()
-        self.check_intergrity()
+        # self.check_intergrity()
 
     @staticmethod
     def is_changable_permission(permission):
@@ -60,10 +60,9 @@ class ApkPackage(dict):
             return result[0]
 
     def read_info(self):
-        ret, self.output = run_cmdline('aapt dump badging %s' % self.path)
+        ret, self.output, stderr = run_cmdline('aapt dump badging %s' % self.path)
         if ret != 0:
-            logger.error('errno=%d, %s' % (ret, self.output))
-            ApkPkgParseError(self.path)
+            raise ApkPkgParseError(self.path)
             # BUG Command 'aapt(version=28.0.3, platform=darwin)' crashes on Alipay(versionCode='137' versionName='10.1.55.6000').
             # Not give up when it returned a non-0 value?
         self['apk_path'] = self.path

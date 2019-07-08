@@ -4,19 +4,36 @@ import logging
 import re
 import shlex
 
-logger = logging.getLogger(__name__)
+def setup_logger():
+    pass
 
-
-# def run_cmdline(cmd):
-#     logger.debug('[CMD]>%s' % cmd)
-#     ret, output = subprocess.getstatusoutput(cmd)
-#     return ret, output
-
-def run_cmdline(cmd):
-    logger.debug('[CMD]>%s' % cmd)
+def run_cmdline(cmd, run_async=False, **kwargs):
+    # Default arguments for subprocess functions
+    if 'shell' not in kwargs:
+        kwargs['shell'] = False
+    if 'stdin' not in kwargs:
+        kwargs['stdin'] = subprocess.DEVNULL
+    if 'stdout' not in kwargs:
+        kwargs['stdout'] = subprocess.PIPE
+    if 'stderr' not in kwargs:
+        kwargs['stderr'] = subprocess.PIPE
+    if 'bufsize' not in kwargs:
+        kwargs['bufsize'] = 1
+    logging.getLogger('cmd').debug('%s %s' % ( '(ASYNC)' if run_async else ''  , cmd))
     cmd_array = shlex.split(cmd)
-    result = subprocess.run(cmd_array, shell=False, stdout=subprocess.PIPE)
-    return result.returncode, result.stdout.decode().strip()
+    if run_async:
+        return run_cmdline_async(cmd_array, **kwargs)
+    else:
+        return run_cmdline_sync(cmd_array, **kwargs)
+
+def run_cmdline_sync(cmd_array, **kwargs):
+    #result = subprocess.run(cmd_array, shell=False, stdout=subprocess.PIPE)
+    result = subprocess.run(cmd_array, **kwargs)
+    return result.returncode, result.stdout.decode().strip(), result.stderr.decode().strip()
+
+def run_cmdline_async(cmd_array, **kwargs):
+    #return subprocess.Popen(cmd_array, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE, shell=False, bufsize=1)
+    return subprocess.Popen(cmd_array, **kwargs)
 
 def get_elf_arch(elf_path):
     # run_cmdline('readelf')

@@ -2,8 +2,8 @@
     "trigger": 2,
     "monkey_ops": 1000,
     "running_time": 20,
-    "input_dir": "/home/zyh/dev/data/in",
-    "output_dir": "/home/zyh/dev/data/out",
+    "input_dir": "/home/zyh/test111",
+    "output_dir": "/home/zyh/test/out",
     "remote_bin_dir": "/data/capture123",
     "remote_cap_dir": "/sdcard/capture123",
     "local_bin_dir": "bin",
@@ -12,5 +12,11 @@
         "aarch64": "tcpdump_armv7hf"
     },
     "bin_uaplugin": "uaplugin.jar",
-    "stor_dir":"/home/zyh/dev/Testbench/0.2.4/stor"
+    "stor_dir":"/home/zyh/dev/Testbench/0.2.4/stor",
+    "env_pkgs": [
+        "com.topjohnwu.magisk",
+        "de.robv.android.xposed.installer",
+        "cn.edu.ujn.loci.uaplugin2",
+        "cn.edu.ujn.loci.uaplugin2.test"
+    ]
 }
