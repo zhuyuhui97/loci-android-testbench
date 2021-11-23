@@ -127,6 +127,7 @@ class RunnerThread(threading.Thread):
     ERR_CRASH = -2  # APP crash detected
     ERR_NETIFDOWN = -3  # Network interface is down
     ERR_PCAP_NOTEXIST = -4 # Pcap file not exist on the phone
+    ERR_LAUNCH = -5
     glk_getapk = threading.Lock()
 
     def __init__(self, device_name, queue, config, result_writer, gev_wait_event, gev_stop, gev_no_more_apk):
@@ -176,6 +177,7 @@ class RunnerThread(threading.Thread):
         except DeviceApkBatchUninstallFailHandleError as e:
             self.logger.error('Failed to clean 3rd party apps: ' + str(e))
             return
+        self.result_writer.register_device(self.device)
         capture_path = self.config['remote_cap_dir']
         self.acw_thread.start()
         self.logger.info('AppCrashWatcher start requested.')
@@ -252,12 +254,9 @@ class RunnerThread(threading.Thread):
                         self.device.netif, capture_file_path)
                     # BUG Program don't know if tcpdump is alive.
                     status_flag = self.STATUS_WATCH_EXEC
-                    try:
-                        self.device.launch_app(item)
-                        self.logger.info('Launched: {0}({1})@{2}.'.format(item['pkg_name'], item['app_label'], item['apk_path']))
-                        status_flag = self.STATUS_APP_LAUNCHED
-                    except DeviceApkLaunchError:
-                        self.logger.error('Failed to launch: {0}({1})@{2}.'.format(item['pkg_name'], item['app_label'], item['apk_path']))
+                    self.device.launch_app(item)
+                    self.logger.info('Launched: {0}({1})@{2}.'.format(item['pkg_name'], item['app_label'], item['apk_path']))
+                    status_flag = self.STATUS_APP_LAUNCHED
                     self.logger.info('Waiting for crash event...')
                     self.acw_crash_event.wait(timeout=10)
                     self.acw_ready_event.clear()
@@ -283,7 +282,8 @@ class RunnerThread(threading.Thread):
                         except (DeviceRunMonkeyError, DeviceRunUiautomatorError) as e:
                             # warn without handling.
                             self.logger.error('Failed to run {}.'.format(traverse_tag))
-                        item['traverse_tag'] = traverse_tag
+                        # item['traverse_tag'] = traverse_tag
+                        item['traverse_tag'] = self.config['trigger']
                         status_flag = self.STATUS_FINISHED
                         if self.config['trigger'] == 1:  # Monkey
                             db_flag = self.result_writer.FLAG_MONKEY_OK
@@ -296,6 +296,13 @@ class RunnerThread(threading.Thread):
                     self.logger.error('Failed to install: ' + str(e))
                     error_flag = self.ERR_INSTALL
                     db_flag = self.result_writer.FLAG_INSTALL_FAIL
+                    # TODO: Handle other errors
+                    if e.errtype == 'INSTALL_FAILED_INSUFFICIENT_STORAGE':
+                        raise e
+                except DeviceApkLaunchError:
+                    self.logger.error('Failed to launch: {0}({1})@{2}.'.format(item['pkg_name'], item['app_label'], item['apk_path']))
+                    error_flag = self.ERR_LAUNCH
+                    db_flag = self.result_writer.FLAG_LAUNCH_FAIL
                 except DeviceApkRuntimeError as e:
                     self.logger.error('Crash detected.')
                     error_flag = self.ERR_CRASH
@@ -319,6 +326,7 @@ class RunnerThread(threading.Thread):
                         self.logger.info('Pulling captured pcap file...')
                         if status_flag >= self.STATUS_WATCH_EXEC:
                             try:
+                                self.device.adb_run_remote_su_cmdline('sync', timeout=self.device.DEFAULT_TIMEOUT_CMD)
                                 if not self.device.test_file_exists(capture_file_path):
                                     raise DevicePcapNotExist(path=capture_file_path, device=self)
                                 # (1) 'tcpdump' still alive when app crash.
@@ -329,6 +337,7 @@ class RunnerThread(threading.Thread):
                                     self.device.adb_pull(
                                         capture_file_path, self.config['output_dir'] + '/')
                                 self.logger.info('Capture file pulled to ' + self.config['output_dir'])
+                                # TODO: set file ready flag
                             except DeviceFileNotExist:
                                 status_flag = self.STATUS_PCAP_NOTEXIST
                                 error_flag = self.ERR_PCAP_NOTEXIST
@@ -348,6 +357,9 @@ class RunnerThread(threading.Thread):
                         self.logger.info('Cleaning 3rd party apps...')
                         self.device.clean_3rdparty_apps()
                     try:
+                        self.logger.info('Writing result...')
+                        # TODO: check file ready flag
+                        # TODO: 写入失败会导致线程阻塞
                         if (status_flag == self.STATUS_FINISHED and error_flag != self.ERR_PCAP_NOTEXIST):
                             self.result_writer.report_success(
                                 self.device, item, pcap_file_name, db_flag)
@@ -365,13 +377,13 @@ class RunnerThread(threading.Thread):
         except Exception as e:
             self.logger.error(traceback.format_exc())
         finally:
+            self.is_running = False
+            self.logger.info('Requesting AppCrashWatcher to stop...')
+            self.acw_thread.stop()
             if self.do_cleaning:
                 self.logger.info('Cleaning 3rd party apps...')
                 if item != None:
                     self.device.clean_3rdparty_apps()
-                self.logger.info('Requesting AppCrashWatcher to stop...')
-                self.acw_thread.stop()
-                self.is_running = False
                 self.logger.info('Cleaning device environment...')
                 self.device.clean_device()
                 self.logger.info('Runner thread for {0} stopped.'.format(self.device_name))

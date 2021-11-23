@@ -24,53 +24,61 @@ logger = logging.getLogger(name=__name__)
 no_more_apk = threading.Event()
 stopped = threading.Event()
 global_wait = threading.Event()
-getapk_lock = threading.Lock()
+
+
+
 
 class ApkAnalyzerThread(threading.Thread):
-    def __init__(self, path, queue, config, result_writer, gev_stop, gev_no_more_apk):
+    def __init__(self, path, queue_list, config, result_writer, gev_stop, gev_no_more_apk):
         threading.Thread.__init__(self)
         self.path = path
-        self.queue = queue
+        self.queue_list = queue_list
         self.config = config
         self.result_writer = result_writer
         self.gev_stop = gev_stop
         self.gev_stop.clear()
         self.gev_no_more_apk = gev_no_more_apk
         self.gev_no_more_apk.clear()
-        self.logger = logging.getLogger(name='main.' + self.__class__.__name__)
+        self.logger = logging.getLogger(name=__name__)
 
-    def report_error(self, path, md5, flag):
+    def report_error(self, path, md5):
         item = dict()
         item['apk_path'] = path
         item['md5'] = md5
+        flag = self.result_writer.FLAG_BROKEN
         self.result_writer.report_fail(None, item, flag)
 
     def run(self):
-        filelist = walk_path(self.path)
+        '''
+         zgkom
+         让同一台设备在规定时间，只对同一类apk采集
+         :return:
+        '''
+        dirs_name = os.listdir(self.path)
+        for dir_name in dirs_name:
+            dir_path = os.path.join(self.path, dir_name)
+            files = os.listdir(dir_path)
+            temp_queue = Queue()
+            for item in files:
+                md5 = 'NONE'
+                item = os.path.join(dir_path, item)
+                if self.gev_stop.is_set():
+                    break
+                if item[-4:] != '.apk':
+                    continue
+                try:
+                    md5 = get_md5_from_path(item)
+                    info = ApkPackage(item, self.config)
+                    temp_queue.put(info)
+                except (ApkPkgParseError, Exception) as e:
+                    path = item
+                    self.logger.error('Failed to parse apk ' + item)
+                    self.report_error(item, md5)
+            temp_queue.put(None)
+            self.queue_list.append(temp_queue)
+            self.gev_no_more_apk.set()
 
-        for item in filelist:
-            md5 = 'NONE'
-            if self.gev_stop.is_set():
-                break
-            if item[-4:] != '.apk':
-                continue
-            try:
-                md5 = get_md5_from_path(item)
-                info = ApkPackage(item, self.config)
-                self.queue.put(info)
-            except ApkPkgEssentialPropMissing:
-                path = item
-                flag = self.result_writer.FLAG_BROKEN
-                self.logger.error('Essential properity missing ' + item)
-                self.report_error(item, md5, flag)# TODO print more info here
-            except (ApkPkgParseError, Exception) as ex:
-                path = item
-                flag = self.result_writer.FLAG_BROKEN
-                self.logger.error('Failed to parse apk ' + item + ' ' + ex.__class__.__name__)
-                self.logger.error(traceback.format_exc())
-                self.report_error(item, md5, flag)
-        self.gev_no_more_apk.set()
-        self.queue.put(None)
+
 
 
 class ApkDispatcherThread(threading.Thread):
@@ -89,12 +97,13 @@ if __name__ == '__main__':
     signal.signal(signal.SIGHUP, sigint_handler)
     signal.signal(signal.SIGTERM, sigint_handler)
     logging.basicConfig(
-        level=logging.INFO, format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s')
+        level=logging.INFO, format='[%(asctime)s][%(name)s][%(levelname)s] %(message)s')
 
     global device_thread_list
     device_thread_list = list()
     apk_path_list = list()
-    apk_queue_uni = Queue()
+    apk_queue_list = list()
+    queue_list = list()
     self_dir= os.path.dirname(os.path.abspath(__file__))
     config_file = open(os.path.join(self_dir, 'config.json'))
     config = json.load(config_file)
@@ -104,11 +113,11 @@ if __name__ == '__main__':
     config_file.close()
 
     log_lock = threading.Lock()
-    sql_conn = pymysql.connect(host='202.194.67.219', user='root5', passwd='root', db='ybn_v2')  #
-    result_writer = result_writer.DbResultWriter(config, sql_conn, log_lock)  #
-    #log_path = os.path.join(config['output_dir'], 'capture_log.sql')
-    #log_file = open(log_path, mode='a')
-    #result_writer = result_writer.SqlTextResultWriter(
+    sql_conn = pymysql.connect(host='202.194.67.219', user='root5', passwd='root', db='ybn_v2')
+    result_writer = result_writer.DbResultWriter(config, sql_conn, log_lock)
+    # log_path = os.path.join(config['output_dir'], 'capture_log.sql')
+    # log_file = open(log_path, mode='a')
+    # result_writer = result_writer.SqlTextResultWriter(
     #     config, log_file, log_lock)
 
     check_path(config['output_dir'])
@@ -116,24 +125,23 @@ if __name__ == '__main__':
     if ret != 0:
         exit()
     analyzer_thread = ApkAnalyzerThread(
-        config['input_dir'], apk_queue_uni, config, result_writer, stopped, no_more_apk)
+        config['input_dir'], apk_queue_list, config, result_writer, stopped, no_more_apk)
     analyzer_thread.start()
 
     # TODO dispatcher_thread = ApkDispatcherThread(input_queue, output_queues)
-
+    index = 0
     for item in device_list:
-        t = RunnerThread(item, apk_queue_uni, config,
+        t = RunnerThread(item, apk_queue_list[index], config,
                          result_writer, global_wait, stopped, no_more_apk)
         device_thread_list.append(t)
         t.start()
+        index = index + 1
 
     analyzer_thread.join()
     # TODO dispatcher_thread.join()
     for item in device_thread_list:
         item.join()
 
-    # HACK Kill adb manually for subprocess.Popen(shell=True) in acw thread
-    #run_cmdline('killall adb')
-
-    #log_file.close()
-    sql_conn.close()  #
+    
+    # log_file.close()
+    sql_conn.close()

@@ -62,12 +62,12 @@ class Device(object):
         # TODO Handle failure when it returned an non-0 value: ['error: no devices found']
         ret, stdout, stderr = self.adb_command('push', '\'{0}\' \'{1}\''.format(src_path, dst_path))
         if ret != 0:
-            raise AdbPushError(src=src_path, dst=dst_path, ret=ret, stdout=stdout, stderr=stderr)
+            raise AdbPushError(device=self, src=src_path, dst=dst_path, ret=ret, stdout=stdout, stderr=stderr)
 
     def adb_pull(self, src_path, dst_path):
         ret, stdout, stderr = self.adb_command('pull', '\'{0}\' \'{1}\''.format(src_path, dst_path))
         if ret != 0:
-            raise AdbPullError(src=src_path, dst=dst_path, ret=ret, stdout=stdout, stderr=stderr)
+            raise AdbPullError(device=self, src=src_path, dst=dst_path, ret=ret, stdout=stdout, stderr=stderr)
 
     def adb_wait_for_boot_complete(self, timeout=DEFAULT_TIMEOUT_REBOOT):
         self.logger.debug('Waiting for device online...')
@@ -91,7 +91,7 @@ class Device(object):
     def pull_traffic(self, src_path, dest_path):
         ret, output, stderr = self.adb_run_remote_cmdline("ls %s" % src_path)
         if ret != 0:
-            raise AdbError(self, ret=ret, stdout=output, stderr=stderr, info='Failed to list \'{0}\'.'.format(src_path))
+            raise AdbError(device=self, ret=ret, stdout=output, stderr=stderr, info='Failed to list \'{0}\'.'.format(src_path))
         res = output.split()
         for item in res:
             item = item.strip()
@@ -133,9 +133,9 @@ class Device(object):
             regex = r"Failure \[(.*?): (.*?)\]"
             pattern = re.compile(regex)
             match = pattern.match(output_lines[-1])
-            raise DeviceApkInstallError(device=self, errtype=match.group(1), apk_info=apk_info, apk_path = apk_path, cmd='adb_install', ret=ret, stdout=output, stderr=stderr, info=match.group(2))
+            raise DeviceApkInstallError(device=self, errtype=match.group(1), apk_info=apk_info, apk_path=apk_path, cmd='adb_install', ret=ret, stdout=output, stderr=stderr, info=match.group(2))
         else: # TODO: 
-            raise DeviceApkInstallError(device=self, errtype='OTHER', apk_info=apk_info, apk_path = apk_path, cmd='adb_install', ret=ret, stdout=output, stderr=stderr, info='Unknown failure')
+            raise DeviceApkInstallError(device=self, errtype='OTHER', apk_info=apk_info, apk_path=apk_path, cmd='adb_install', ret=ret, stdout=output, stderr=stderr, info='Unknown failure')
         # All runtime permissions are granted at installtion. 
         # if (int(apk_info['pkg_target_sdkver']) >= 23) and (apk_info['pkg_target_sdkver'] != -1):
         #     apk_info.grant_permissions(self)
@@ -174,7 +174,6 @@ class Device(object):
                 err_list[ex.errtype].append(err_obj)
         if fail:
             raise DeviceApkBatchUninstallError(device=self, status_list=err_list)
-
 
     def uninstall_apk_local(self, apk_info=None, pkg_name=None, uninstall_timeout=DEFAULT_TIMEOUT_UNINSTALL):
         device_name = self.device_name
@@ -248,7 +247,7 @@ class Device(object):
             err_list = list()
             for item in apps:
                 err_list.append({'pkg_name': item, 'errtype': 'UNINSTALL_FAILURE_HANDLE_FAILED', 'ex': None})
-            raise DeviceApkBatchUninstallFailHandleError(status_list=err_list)
+            raise DeviceApkBatchUninstallFailHandleError(device=self, status_list=err_list)
 
     @classmethod
     def __list_device_all(cls):  # Show all android device connected to the PC.
@@ -396,7 +395,7 @@ class Device(object):
         ret, output, stderr = self.adb_run_remote_su_cmdline(cmd)
         if ret != 0:
             raise DeviceSetupTcpdumpError(
-                self, cmd=cmd, ret=ret, stdout=output, stderr=stderr, info='Executable tcpdump is not configured properly.')
+                device=self, cmd=cmd, ret=ret, stdout=output, stderr=stderr, info='Executable tcpdump is not configured properly.')
 
     def setup_tcpdump(self, local_bin_path, remote_bin_path):
         # TODO We assume all devices are ARM-based currently.
